@@ -1,0 +1,83 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: build
+  namespace: apps
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+
+      initContainers:
+        - name: copy-context
+          image: alpine:3.20
+          command:
+            - sh
+            - -c
+          args:
+            - |
+              set -eux
+
+              cp /config/Dockerfile /workspace/Dockerfile
+              cp /config/main.py /workspace/main.py
+              cp /config/pyproject.toml /workspace/pyproject.toml
+
+              echo "Build context:"
+              ls -lah /workspace
+          volumeMounts:
+            - name: build-context-config
+              mountPath: /config
+              readOnly: true
+            - name: workspace
+              mountPath: /workspace
+
+      containers:
+        - name: build
+          image: moby/buildkit:rootless
+          command:
+            - sh
+            - -c
+          args:
+            - |
+              set -eux
+
+              cat > /tmp/buildkitd.toml <<'EOF'
+              [registry."ai-lab-registry:5000"]
+                insecure = true
+              EOF
+
+              echo "Workspace:"
+              ls -lah /workspace
+
+              echo "Dockerfile:"
+              sed -n '1,120p' /workspace/Dockerfile
+
+              buildctl-daemonless.sh build \
+                --frontend dockerfile.v0 \
+                --local context=/workspace \
+                --local dockerfile=/workspace \
+                --output type=image,name=ai-lab-registry:5000/mcp-run:latest,push=true,digestfile=/tmp/digest
+          env:
+            - name: BUILDKITD_FLAGS
+              value: --oci-worker-no-process-sandbox --config /tmp/buildkitd.toml
+          securityContext:
+            runAsUser: 1000
+            runAsGroup: 1000
+            seccompProfile:
+              type: Unconfined
+          volumeMounts:
+            - name: workspace
+              mountPath: /workspace
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+
+      volumes:
+        - name: build-context-config
+          configMap:
+            name: buildkit-context
+        - name: workspace
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}

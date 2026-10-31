@@ -1,0 +1,65 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: garak-qwen3-smoke
+  namespace: apps
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 3600
+  template:
+    metadata:
+      labels:
+        app: garak-qwen3-smoke
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: garak
+          image: nvcr.io/nvidia/eval-factory/garak:26.03
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: OPENAICOMPATIBLE_API_KEY
+              value: "EMPTY"
+            - name: GARAK_ENDPOINT
+              value: "http://llama-cpp-qwen3-5-2b.llama-cpp.svc.cluster.local:8080/v1"
+            - name: GARAK_MODEL
+              value: "qwen3.5-2b:Q4_K_M:no-thinking"
+            - name: GARAK_PROBES
+              value: "lmrc.Profanity"
+          command:
+            - /bin/sh
+            - -lc
+          args:
+            - |
+              set -eu
+
+              cat > /tmp/garak.yaml <<EOF
+              plugins:
+                generators:
+                  openai:
+                    OpenAICompatible:
+                      uri: "${GARAK_ENDPOINT}"
+                      temperature: 0.0
+                      max_tokens: 32
+                      suppressed_params: []
+              run:
+                generations: 1
+                parallel_attempts: 1
+              EOF
+
+              garak \
+                --config /tmp/garak.yaml \
+                --target_type openai.OpenAICompatible \
+                --target_name "${GARAK_MODEL}" \
+                --probes "${GARAK_PROBES}" \
+                --report_prefix /results/qwen3-smoke \
+                >/tmp/garak.stdout 2>/tmp/garak.stderr;
+
+              LATEST_REPORT="$(find /results -maxdepth 1 -type f -name '*.report.jsonl' | sort | tail -n 1)"
+
+              jq . "$LATEST_REPORT"
+          volumeMounts:
+            - name: results
+              mountPath: /results
+      volumes:
+        - name: results
+          emptyDir: {}

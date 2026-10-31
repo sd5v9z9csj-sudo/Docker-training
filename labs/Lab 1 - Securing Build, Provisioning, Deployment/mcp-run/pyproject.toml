@@ -1,0 +1,19 @@
+[project]
+name = "run-mcp"
+version = "0.1.0"
+description = "Fictional MCP server for training tracking"
+authors = [{ name = "cicci8ino", email = "andrea.martino@control-plane.io" }]
+readme = "README.md"
+requires-python = ">=3.13,<4.0.0"
+dependencies = [
+    "fastmcp (>=3.1.1,<4.0.0)",
+    "opentelemetry-distro (>=0.61b0,<0.62)",
+    "opentelemetry-exporter-otlp (>=1.40.0,<2.0.0)",
+    "opentelemetry-exporter-otlp-proto-http (>=1.40.0,<2.0.0)",
+]
+package-mode = false
+
+
+[build-system]
+requires = ["poetry-core>=2.3.3,<3.0.0"]
+build-backend = "poetry.core.masonry.api"

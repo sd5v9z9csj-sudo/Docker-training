@@ -1,0 +1,65 @@
+## Deploy the workload
+apiVersion: v1
+kind: Pod
+metadata:
+  name: mcp-run-server
+  namespace: apps
+  labels:
+    app: run
+spec:
+  containers:
+  - name: mcp-server
+    imagePullPolicy: Always    
+    image: ai-lab-registry:5000/mcp-run:latest
+    ports:
+    - containerPort: 8080
+      name: http
+    env:
+    - name: PORT
+      value: "8080"
+    envFrom:
+      - configMapRef:
+          name: run-config
+    resources:
+      limits:
+        cpu: "500m"
+        memory: "512Mi"
+      requests:
+        cpu: "100m"
+        memory: "128Mi"
+    securityContext:
+      capabilities:
+        drop:
+        - ALL
+---
+## Send traces in OTLP format to Alloy
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: run-config
+  namespace: apps
+data:
+  OTEL_SERVICE_NAME: "run"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://alloy-otlp.grafana.svc.cluster.local:4317"
+  OTEL_EXPORTER_OTLP_PROTOCOL: "grpc"
+  OTEL_LOG_LEVEL: "error"
+  OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED: "false"
+---
+## Expose the MCP server in the cluster and make it discoverable from the MCP gateway
+apiVersion: v1
+kind: Service
+metadata:
+  name: run
+  namespace: apps
+  labels:
+    mcp-dynamic-discovery: "true"
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: run
+  ports:
+    - name: http
+      port: 8080
+      protocol: TCP
+      targetPort: http
+      appProtocol: agentgateway.dev/mcp

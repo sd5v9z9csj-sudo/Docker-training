@@ -1,0 +1,43 @@
+# syntax=docker/dockerfile:1.7
+
+ARG BUILDKIT_SBOM_SCAN_CONTEXT=true
+ARG BUILDKIT_SBOM_SCAN_STAGE=true
+
+# Stage 1: Builder
+FROM dhi.io/python:3.13-dev@sha256:5b78c28a771d041c50b083431e26741677a3565b41a0a02284b8991c604fc71b AS builder
+
+ENV PIP_NO_CACHE_DIR=off \
+    PIP_DISABLE_PIP_VERSION_CHECK=on \
+    POETRY_VERSION=2.0.1 \
+    POETRY_VIRTUALENVS_IN_PROJECT=true \
+    POETRY_NO_INTERACTION=1 \
+    POETRY_VIRTUALENVS_CREATE=true
+
+WORKDIR /app
+
+RUN pip install "poetry==$POETRY_VERSION"
+
+COPY pyproject.toml ./
+
+RUN poetry install --no-root --only main
+
+
+# Stage 2: Runtime
+FROM dhi.io/python:3.13@sha256:dc8f7c6aab976c2d0bc03737705888ce5c39a5b52036e4df1d84e4448bfdaa1c AS runtime
+
+USER root
+WORKDIR /app
+
+COPY --from=builder --chown=65532:65532 /app/.venv /app/.venv
+COPY --chown=65532:65532 main.py .
+
+ENV PATH="/app/.venv/bin:$PATH" \
+    PORT=8080 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
+EXPOSE 8080
+
+USER 65532:65532
+
+CMD ["python", "-c", "import os; os.execvp('fastmcp', ['fastmcp', 'run', 'main.py', '--transport', 'sse', '--host', '0.0.0.0', '--port', os.getenv('PORT', '8080')])"]

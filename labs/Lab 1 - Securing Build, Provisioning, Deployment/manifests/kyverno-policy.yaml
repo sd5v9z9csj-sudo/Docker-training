@@ -1,0 +1,40 @@
+apiVersion: policies.kyverno.io/v1
+kind: ImageValidatingPolicy
+metadata:
+  name: check-images
+spec:
+  webhookConfiguration:
+    timeoutSeconds: 20
+  evaluation:
+    background:
+      enabled: false
+  validationActions: [Deny]
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ['']
+        apiVersions: ['v1']
+        operations: ['CREATE', 'UPDATE']
+        resources: ['pods']
+  matchImageReferences:
+    - glob: ai-lab-registry:5000/*
+  credentials:
+    allowInsecureRegistry: true
+  variables:
+    - name: cosignkeys
+      expression: >-
+        resource.Get("v1", "secrets", "kyverno", "cosign-keys")
+  attestors:
+    - name: cosign
+      cosign:
+        key:
+          hashAlgorithm: 'sha256'
+          expression: string(base64.decode(variables.cosignkeys.data['cosign.pub']))
+        ctlog:
+          url: 'https://rekor.sigstore.dev'
+          insecureIgnoreTlog: true # Skip TLog verification (for testing only)
+          insecureIgnoreSCT: true # Skip Signed Certificate Timestamp (for testing only)
+  validations:
+    - expression: >-
+        images.containers.filter(img, img.startsWith('ai-lab-registry:5000/')).map(img, verifyImageSignatures(img, [attestors.cosign])).all(e ,e > 0)
+      message: >-
+        failed the image Signature verification

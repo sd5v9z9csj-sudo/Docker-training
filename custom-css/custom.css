@@ -1,0 +1,23 @@
+/* Sidebar logo */
+.jp-SidePanel-content {
+  position: relative;
+}
+
+.jp-SidePanel-content::after {
+  content: "";
+  position: absolute;
+
+  left: 50%;
+  bottom: 20px;
+
+  width: 80%;
+  max-width: 300px;
+  aspect-ratio: 3 / 1;
+
+  transform: translateX(-50%);
+
+  background: url("img/logo-black.svg") no-repeat center;
+  background-size: contain;
+
+  pointer-events: none;
+}
